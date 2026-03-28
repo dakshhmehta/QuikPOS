@@ -31,9 +31,9 @@ export interface Table {
   closedAt: number | null;
 }
 
-const ITEMS_KEY = '@dhaba_items';
-const TABLES_KEY = '@dhaba_tables';
-const TABLE_MASTERS_KEY = '@dhaba_table_masters';
+const ITEMS_KEY = '@quikpos_items';
+const TABLES_KEY = '@quikpos_tables';
+const TABLE_MASTERS_KEY = '@quikpos_table_masters';
 
 // Items operations
 export const getItems = async (): Promise<MenuItem[]> => {
