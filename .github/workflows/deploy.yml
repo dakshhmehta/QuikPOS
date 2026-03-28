@@ -38,6 +38,8 @@ jobs:
 
       - name: Build PWA
         working-directory: ./frontend
+        env:
+          EXPO_PUBLIC_BASE_PATH: /QuikPOS
         run: npx expo export -p web --clear
 
       - name: Prepare for GitHub Pages
@@ -48,6 +50,11 @@ jobs:
           # Create .nojekyll to disable Jekyll processing (CRITICAL for _expo folder)
           touch .nojekyll
           echo "✅ .nojekyll created"
+          
+          # Fix asset paths for GitHub Pages subdirectory deployment
+          echo "🔧 Fixing asset paths for /QuikPOS/ base URL..."
+          find . -name "*.html" -type f -exec sed -i 's|href="/|href="/QuikPOS/|g; s|src="/|src="/QuikPOS/|g' {} \;
+          echo "✅ HTML paths updated"
           
           # Verify critical folders exist
           if [ -d "_expo" ]; then
@@ -63,9 +70,15 @@ jobs:
           test -f icon-192.png && echo "✅ icon-192.png found" || echo "⚠️ icon-192.png missing"
           test -f icon-512.png && echo "✅ icon-512.png found" || echo "⚠️ icon-512.png missing"
           
+          # Show sample of fixed paths
+          echo ""
+          echo "📋 Sample of fixed paths in index.html:"
+          grep -o 'src="[^"]*"' index.html | head -5
+          grep -o 'href="[^"]*"' index.html | head -5
+          
           # List all root files and directories
           echo ""
-          echo "📋 Build contents:"
+          echo "📁 Build contents:"
           ls -lah
           
           echo ""
