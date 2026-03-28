@@ -58,7 +58,7 @@ export default function BillScreen() {
     setShowQuantityModal(true);
   };
 
-  const handleQuantitySelect = async (quantity: number) => {
+  const handleQuantitySelect = async (quantityToAdd: number) => {
     if (!table || !selectedItem) return;
 
     const updatedItems = [...table.items];
@@ -66,7 +66,10 @@ export default function BillScreen() {
       (ti) => ti.itemId === selectedItem.id
     );
 
-    if (quantity === 0) {
+    const currentQty = getItemQuantity(selectedItem.id);
+    const newQuantity = currentQty + quantityToAdd;
+
+    if (newQuantity <= 0) {
       if (existingIndex !== -1) {
         updatedItems.splice(existingIndex, 1);
       }
@@ -74,7 +77,7 @@ export default function BillScreen() {
       const tableItem: TableItem = {
         itemId: selectedItem.id,
         itemName: selectedItem.name,
-        quantity,
+        quantity: newQuantity,
         price: selectedItem.price,
       };
 
@@ -102,17 +105,57 @@ export default function BillScreen() {
     setSelectedItem(null);
   };
 
+  const updateItemQuantity = async (item: MenuItem, newQuantity: number) => {
+    if (!table) return;
+
+    const updatedItems = [...table.items];
+    const existingIndex = updatedItems.findIndex(
+      (ti) => ti.itemId === item.id
+    );
+
+    if (newQuantity <= 0) {
+      if (existingIndex !== -1) {
+        updatedItems.splice(existingIndex, 1);
+      }
+    } else {
+      const tableItem: TableItem = {
+        itemId: item.id,
+        itemName: item.name,
+        quantity: newQuantity,
+        price: item.price,
+      };
+
+      if (existingIndex !== -1) {
+        updatedItems[existingIndex] = tableItem;
+      } else {
+        updatedItems.push(tableItem);
+      }
+    }
+
+    const totalAmount = updatedItems.reduce(
+      (sum, item) => sum + item.quantity * item.price,
+      0
+    );
+
+    const updatedTable: Table = {
+      ...table,
+      items: updatedItems,
+      totalAmount,
+    };
+
+    await updateTable(updatedTable);
+    setTable(updatedTable);
+  };
+
   const handleIncrement = async (item: MenuItem) => {
     const currentQty = getItemQuantity(item.id);
-    await handleQuantitySelect(currentQty + 1);
-    setSelectedItem(null);
+    await updateItemQuantity(item, currentQty + 1);
   };
 
   const handleDecrement = async (item: MenuItem) => {
     const currentQty = getItemQuantity(item.id);
     if (currentQty > 0) {
-      await handleQuantitySelect(currentQty - 1);
-      setSelectedItem(null);
+      await updateItemQuantity(item, currentQty - 1);
     }
   };
 
@@ -148,21 +191,32 @@ export default function BillScreen() {
           <Text style={styles.itemName}>{item.name}</Text>
           <Text style={styles.itemPrice}>₹{item.price}</Text>
           {quantity > 0 && (
-            <View style={styles.quantityControls}>
-              <TouchableOpacity
-                style={styles.quantityButton}
-                onPress={() => handleDecrement(item)}
-              >
-                <Ionicons name="remove" size={20} color="#fff" />
-              </TouchableOpacity>
-              <Text style={styles.quantityText}>{quantity}</Text>
-              <TouchableOpacity
-                style={styles.quantityButton}
-                onPress={() => handleIncrement(item)}
-              >
-                <Ionicons name="add" size={20} color="#fff" />
-              </TouchableOpacity>
-            </View>
+            <>
+              <Text style={styles.itemTotal}>
+                {item.price} x {quantity} = ₹{item.price * quantity}
+              </Text>
+              <View style={styles.quantityControls}>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleDecrement(item);
+                  }}
+                >
+                  <Ionicons name="remove" size={20} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.quantityText}>{quantity}</Text>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleIncrement(item);
+                  }}
+                >
+                  <Ionicons name="add" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </>
           )}
         </View>
       </TouchableOpacity>
@@ -171,10 +225,14 @@ export default function BillScreen() {
 
   const renderQuantityPad = () => {
     const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+    const currentQty = selectedItem ? getItemQuantity(selectedItem.id) : 0;
     return (
       <View style={styles.quantityPad}>
-        <Text style={styles.quantityPadTitle}>Select Quantity</Text>
+        <Text style={styles.quantityPadTitle}>Add Quantity</Text>
         <Text style={styles.quantityPadItem}>{selectedItem?.name}</Text>
+        {currentQty > 0 && (
+          <Text style={styles.quantityPadCurrent}>Current: {currentQty}</Text>
+        )}
         <View style={styles.numberGrid}>
           {numbers.map((num) => (
             <TouchableOpacity
@@ -349,6 +407,12 @@ const styles = StyleSheet.create({
     color: '#FF6B35',
     marginBottom: 8,
   },
+  itemTotal: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+    marginBottom: 8,
+  },
   quantityControls: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -425,7 +489,13 @@ const styles = StyleSheet.create({
   quantityPadItem: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 24,
+    marginBottom: 8,
+  },
+  quantityPadCurrent: {
+    fontSize: 14,
+    color: '#4CAF50',
+    fontWeight: '600',
+    marginBottom: 16,
   },
   numberGrid: {
     flexDirection: 'row',
