@@ -21,6 +21,7 @@ export default function RunningTablesScreen() {
   const [availableTables, setAvailableTables] = useState<(TableMaster & { availableSeats: number; occupiedSeats: number })[]>([]);
   const [selectedTableMaster, setSelectedTableMaster] = useState<(TableMaster & { availableSeats: number; occupiedSeats: number }) | null>(null);
   const [numPersons, setNumPersons] = useState('');
+  const [personsError, setPersonsError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
@@ -57,29 +58,65 @@ export default function RunningTablesScreen() {
   const handleTableMasterSelect = (tableMaster: TableMaster & { availableSeats: number; occupiedSeats: number }) => {
     setSelectedTableMaster(tableMaster);
     setShowTableSelectModal(false);
+    setNumPersons('');
+    setPersonsError('');
     setShowPersonsModal(true);
+  };
+
+  const validatePersons = (value: string): boolean => {
+    if (!selectedTableMaster) return false;
+    
+    if (!value.trim()) {
+      setPersonsError('Number of persons is required');
+      return false;
+    }
+
+    const persons = parseInt(value);
+    if (isNaN(persons)) {
+      setPersonsError('Please enter a valid number');
+      return false;
+    }
+
+    if (persons <= 0) {
+      setPersonsError('Must be at least 1 person');
+      return false;
+    }
+
+    if (persons > selectedTableMaster.availableSeats) {
+      setPersonsError(`Only ${selectedTableMaster.availableSeats} seat${selectedTableMaster.availableSeats === 1 ? '' : 's'} available`);
+      return false;
+    }
+
+    setPersonsError('');
+    return true;
+  };
+
+  const handlePersonsChange = (value: string) => {
+    setNumPersons(value);
+    if (value.trim()) {
+      validatePersons(value);
+    } else {
+      setPersonsError('Number of persons is required');
+    }
   };
 
   const handleConfirmPersons = async () => {
     if (!selectedTableMaster) return;
 
+    if (!validatePersons(numPersons)) {
+      return;
+    }
+
     const persons = parseInt(numPersons);
-    if (isNaN(persons) || persons <= 0) {
-      Alert.alert('Error', 'Please enter a valid number of persons');
-      return;
-    }
-
-    if (persons > selectedTableMaster.availableSeats) {
-      Alert.alert('Error', `Only ${selectedTableMaster.availableSeats} seats available on this table`);
-      return;
-    }
-
     await addTable(selectedTableMaster.id, selectedTableMaster.name, persons);
     setNumPersons('');
+    setPersonsError('');
     setSelectedTableMaster(null);
     setShowPersonsModal(false);
     loadTables();
   };
+
+  const isConfirmDisabled = !numPersons.trim() || personsError !== '';
 
   const handleTablePress = (table: Table) => {
     router.push({
@@ -210,14 +247,17 @@ export default function RunningTablesScreen() {
             </View>
             <Text style={styles.inputLabel}>Number of Persons</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, personsError ? styles.inputError : null]}
               placeholder="Enter number of persons"
               value={numPersons}
-              onChangeText={setNumPersons}
+              onChangeText={handlePersonsChange}
               keyboardType="numeric"
               autoFocus
               maxLength={2}
             />
+            {personsError ? (
+              <Text style={styles.errorText}>{personsError}</Text>
+            ) : null}
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
@@ -225,15 +265,24 @@ export default function RunningTablesScreen() {
                   setShowPersonsModal(false);
                   setSelectedTableMaster(null);
                   setNumPersons('');
+                  setPersonsError('');
                 }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
+                style={[
+                  styles.modalButton, 
+                  styles.confirmButton,
+                  isConfirmDisabled && styles.confirmButtonDisabled
+                ]}
                 onPress={handleConfirmPersons}
+                disabled={isConfirmDisabled}
               >
-                <Text style={styles.confirmButtonText}>Confirm</Text>
+                <Text style={[
+                  styles.confirmButtonText,
+                  isConfirmDisabled && styles.confirmButtonTextDisabled
+                ]}>Confirm</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -452,7 +501,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    marginBottom: 20,
+    marginBottom: 8,
+  },
+  inputError: {
+    borderColor: '#F44336',
+    borderWidth: 2,
+  },
+  errorText: {
+    color: '#F44336',
+    fontSize: 14,
+    marginBottom: 12,
+    marginTop: -4,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -476,9 +535,16 @@ const styles = StyleSheet.create({
   confirmButton: {
     backgroundColor: '#FF6B35',
   },
+  confirmButtonDisabled: {
+    backgroundColor: '#ccc',
+    opacity: 0.6,
+  },
   confirmButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  confirmButtonTextDisabled: {
+    color: '#999',
   },
 });

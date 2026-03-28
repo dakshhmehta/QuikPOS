@@ -242,3 +242,9 @@ export const getClosedTablesByDate = async (date: Date): Promise<Table[]> => {
     return closedAt >= startOfDay.getTime() && closedAt <= endOfDay.getTime();
   });
 };
+
+export const deleteTable = async (tableId: string): Promise<void> => {
+  const tables = await getTables();
+  const filtered = tables.filter(t => t.id !== tableId);
+  await saveTables(filtered);
+};

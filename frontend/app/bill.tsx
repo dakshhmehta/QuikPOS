@@ -17,6 +17,7 @@ import {
   getTables,
   updateTable,
   closeTable,
+  deleteTable,
   MenuItem,
   Table,
   TableItem,
@@ -160,10 +161,29 @@ export default function BillScreen() {
   };
 
   const handleCloseTable = () => {
-    if (!table || table.items.length === 0) {
-      Alert.alert('Error', 'Please add items before closing the table');
+    if (!table) return;
+    
+    // If table has 0 amount, just discard it
+    if (table.totalAmount === 0) {
+      Alert.alert(
+        'Discard Table',
+        'This table has no orders. Do you want to discard it?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: async () => {
+              await deleteTable(table.id);
+              router.back();
+            },
+          },
+        ]
+      );
       return;
     }
+    
+    // Otherwise, show the bill and close normally
     setShowCloseModal(true);
   };
 
