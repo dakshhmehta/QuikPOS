@@ -23,7 +23,19 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "QuikPOS",
+      "shortName": "QuikPOS",
+      "lang": "en",
+      "scope": "/",
+      "themeColor": "#FF6B35",
+      "backgroundColor": "#FFFFFF",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "description": "Point of Sale System for Small Restaurants - Offline Table & Order Management",
+      "dir": "auto",
+      "preferRelatedApplications": false
     },
     "plugins": [
       "expo-router",
