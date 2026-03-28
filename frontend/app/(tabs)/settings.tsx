@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { getItems, addItem, updateItem, deleteItem, MenuItem } from '../../utils/storage';
 
-export default function ItemsScreen() {
+export default function SettingsScreen() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -118,6 +118,11 @@ export default function ItemsScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.sectionHeader}>
+        <Ionicons name="fast-food" size={24} color="#FF6B35" />
+        <Text style={styles.sectionTitle}>Menu Items</Text>
+      </View>
+      
       <FlatList
         data={items}
         renderItem={renderItem}
@@ -198,6 +203,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  sectionHeader: {
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    gap: 12,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
   },
   listContainer: {
     padding: 16,
