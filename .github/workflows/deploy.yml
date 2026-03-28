@@ -40,19 +40,37 @@ jobs:
         working-directory: ./frontend
         run: npx expo export -p web --clear
 
-      - name: Ensure PWA assets
+      - name: Prepare for GitHub Pages
         working-directory: ./frontend/dist
         run: |
-          # Create .nojekyll for GitHub Pages compatibility
+          echo "📦 Preparing PWA build for GitHub Pages..."
+          
+          # Create .nojekyll to disable Jekyll processing (CRITICAL for _expo folder)
           touch .nojekyll
-          # Verify manifest.json exists
+          echo "✅ .nojekyll created"
+          
+          # Verify critical folders exist
+          if [ -d "_expo" ]; then
+            echo "✅ _expo folder found"
+            ls -la _expo/ | head -10
+          else
+            echo "❌ ERROR: _expo folder missing!"
+            exit 1
+          fi
+          
+          # Verify manifest and icons
           test -f manifest.json && echo "✅ manifest.json found" || echo "⚠️ manifest.json missing"
-          # Verify icons exist
           test -f icon-192.png && echo "✅ icon-192.png found" || echo "⚠️ icon-192.png missing"
           test -f icon-512.png && echo "✅ icon-512.png found" || echo "⚠️ icon-512.png missing"
-          # List root files for verification
-          echo "📦 Build contents:"
+          
+          # List all root files and directories
+          echo ""
+          echo "📋 Build contents:"
           ls -lah
+          
+          echo ""
+          echo "🔍 Checking for underscore files/folders (must be included):"
+          find . -maxdepth 2 -name "_*" -o -name ".*" | head -20
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
