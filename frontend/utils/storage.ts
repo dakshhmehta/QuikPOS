@@ -13,9 +13,17 @@ export interface TableItem {
   price: number;
 }
 
-export interface Table {
+export interface TableMaster {
   id: string;
   name: string;
+  maxSeats: number;
+}
+
+export interface Table {
+  id: string;
+  tableMasterId: string;
+  name: string;
+  numPersons: number;
   status: 'running' | 'closed';
   items: TableItem[];
   totalAmount: number;
@@ -25,6 +33,7 @@ export interface Table {
 
 const ITEMS_KEY = '@dhaba_items';
 const TABLES_KEY = '@dhaba_tables';
+const TABLE_MASTERS_KEY = '@dhaba_table_masters';
 
 // Items operations
 export const getItems = async (): Promise<MenuItem[]> => {
@@ -72,6 +81,89 @@ export const deleteItem = async (id: string): Promise<void> => {
   await saveItems(filtered);
 };
 
+// Table Masters operations
+export const getTableMasters = async (): Promise<TableMaster[]> => {
+  try {
+    const masters = await AsyncStorage.getItem(TABLE_MASTERS_KEY);
+    return masters ? JSON.parse(masters) : [];
+  } catch (error) {
+    console.error('Error getting table masters:', error);
+    return [];
+  }
+};
+
+export const saveTableMasters = async (masters: TableMaster[]): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(TABLE_MASTERS_KEY, JSON.stringify(masters));
+  } catch (error) {
+    console.error('Error saving table masters:', error);
+  }
+};
+
+export const addTableMaster = async (name: string, maxSeats: number): Promise<TableMaster> => {
+  const masters = await getTableMasters();
+  const newMaster: TableMaster = {
+    id: Date.now().toString(),
+    name,
+    maxSeats,
+  };
+  masters.push(newMaster);
+  await saveTableMasters(masters);
+  return newMaster;
+};
+
+export const updateTableMaster = async (id: string, name: string, maxSeats: number): Promise<void> => {
+  const masters = await getTableMasters();
+  const index = masters.findIndex(m => m.id === id);
+  if (index !== -1) {
+    masters[index] = { id, name, maxSeats };
+    await saveTableMasters(masters);
+  }
+};
+
+export const deleteTableMaster = async (id: string): Promise<void> => {
+  const masters = await getTableMasters();
+  const filtered = masters.filter(m => m.id !== id);
+  await saveTableMasters(filtered);
+};
+
+export const getTableOccupancy = async (tableMasterId: string): Promise<{ maxSeats: number; occupiedSeats: number; availableSeats: number }> => {
+  const masters = await getTableMasters();
+  const master = masters.find(m => m.id === tableMasterId);
+  if (!master) {
+    return { maxSeats: 0, occupiedSeats: 0, availableSeats: 0 };
+  }
+
+  const tables = await getTables();
+  const runningTables = tables.filter(t => t.tableMasterId === tableMasterId && t.status === 'running');
+  const occupiedSeats = runningTables.reduce((sum, t) => sum + t.numPersons, 0);
+  const availableSeats = Math.max(0, master.maxSeats - occupiedSeats);
+
+  return {
+    maxSeats: master.maxSeats,
+    occupiedSeats,
+    availableSeats,
+  };
+};
+
+export const getAvailableTableMasters = async (): Promise<(TableMaster & { availableSeats: number; occupiedSeats: number })[]> => {
+  const masters = await getTableMasters();
+  const result = [];
+
+  for (const master of masters) {
+    const occupancy = await getTableOccupancy(master.id);
+    if (occupancy.availableSeats > 0) {
+      result.push({
+        ...master,
+        availableSeats: occupancy.availableSeats,
+        occupiedSeats: occupancy.occupiedSeats,
+      });
+    }
+  }
+
+  return result;
+};
+
 // Tables operations
 export const getTables = async (): Promise<Table[]> => {
   try {
@@ -91,11 +183,13 @@ export const saveTables = async (tables: Table[]): Promise<void> => {
   }
 };
 
-export const addTable = async (name: string): Promise<Table> => {
+export const addTable = async (tableMasterId: string, name: string, numPersons: number): Promise<Table> => {
   const tables = await getTables();
   const newTable: Table = {
     id: Date.now().toString(),
+    tableMasterId,
     name,
+    numPersons,
     status: 'running',
     items: [],
     totalAmount: 0,

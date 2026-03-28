@@ -12,18 +12,24 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { getRunningTables, addTable, Table } from '../../utils/storage';
+import { getRunningTables, addTable, Table, getAvailableTableMasters, TableMaster } from '../../utils/storage';
 
 export default function RunningTablesScreen() {
   const [tables, setTables] = useState<Table[]>([]);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [tableName, setTableName] = useState('');
+  const [showTableSelectModal, setShowTableSelectModal] = useState(false);
+  const [showPersonsModal, setShowPersonsModal] = useState(false);
+  const [availableTables, setAvailableTables] = useState<(TableMaster & { availableSeats: number; occupiedSeats: number })[]>([]);
+  const [selectedTableMaster, setSelectedTableMaster] = useState<(TableMaster & { availableSeats: number; occupiedSeats: number }) | null>(null);
+  const [numPersons, setNumPersons] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
   const loadTables = async () => {
     const runningTables = await getRunningTables();
     setTables(runningTables);
+    
+    const available = await getAvailableTableMasters();
+    setAvailableTables(available);
   };
 
   useFocusEffect(
@@ -38,22 +44,47 @@ export default function RunningTablesScreen() {
     setRefreshing(false);
   };
 
-  const handleAddTable = async () => {
-    if (!tableName.trim()) {
-      Alert.alert('Error', 'Table name is required');
+  const handleAddTableClick = async () => {
+    const available = await getAvailableTableMasters();
+    if (available.length === 0) {
+      Alert.alert('No Tables Available', 'All tables are full. Please add more tables in Settings or wait for tables to close.');
+      return;
+    }
+    setAvailableTables(available);
+    setShowTableSelectModal(true);
+  };
+
+  const handleTableMasterSelect = (tableMaster: TableMaster & { availableSeats: number; occupiedSeats: number }) => {
+    setSelectedTableMaster(tableMaster);
+    setShowTableSelectModal(false);
+    setShowPersonsModal(true);
+  };
+
+  const handleConfirmPersons = async () => {
+    if (!selectedTableMaster) return;
+
+    const persons = parseInt(numPersons);
+    if (isNaN(persons) || persons <= 0) {
+      Alert.alert('Error', 'Please enter a valid number of persons');
       return;
     }
 
-    await addTable(tableName.trim());
-    setTableName('');
-    setShowAddModal(false);
+    if (persons > selectedTableMaster.availableSeats) {
+      Alert.alert('Error', `Only ${selectedTableMaster.availableSeats} seats available on this table`);
+      return;
+    }
+
+    await addTable(selectedTableMaster.id, selectedTableMaster.name, persons);
+    setNumPersons('');
+    setSelectedTableMaster(null);
+    setShowPersonsModal(false);
     loadTables();
   };
 
   const handleTablePress = (table: Table) => {
     router.push({
       pathname: '/bill',
-      params: { tableId: table.id, tableName: table.name },
+      params: { tableId: table.id, tableName: `${table.name} (${table.numPersons} person${table.numPersons > 1 ? 's' : ''})` },
     });
   };
 
@@ -67,10 +98,31 @@ export default function RunningTablesScreen() {
         <Ionicons name="restaurant-outline" size={32} color="#FF6B35" />
       </View>
       <Text style={styles.tableName}>{item.name}</Text>
+      <Text style={styles.tablePersons}>{item.numPersons} {item.numPersons === 1 ? 'person' : 'persons'}</Text>
       {item.items.length > 0 && (
         <View style={styles.itemsBadge}>
           <Text style={styles.itemsBadgeText}>{item.items.length}</Text>
         </View>
+      )}
+    </TouchableOpacity>
+  );
+
+  const renderAvailableTable = ({ item }: { item: TableMaster & { availableSeats: number; occupiedSeats: number } }) => (
+    <TouchableOpacity
+      style={styles.tableMasterCard}
+      onPress={() => handleTableMasterSelect(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.tableMasterIcon}>
+        <Ionicons name="restaurant" size={28} color="#FF6B35" />
+      </View>
+      <Text style={styles.tableMasterName}>{item.name}</Text>
+      <View style={styles.seatsInfo}>
+        <Text style={styles.seatsLabel}>Available:</Text>
+        <Text style={styles.seatsValue}>{item.availableSeats}/{item.maxSeats}</Text>
+      </View>
+      {item.occupiedSeats > 0 && (
+        <Text style={styles.occupiedInfo}>({item.occupiedSeats} occupied)</Text>
       )}
     </TouchableOpacity>
   );
@@ -97,44 +149,91 @@ export default function RunningTablesScreen() {
 
       <TouchableOpacity
         style={styles.addButton}
-        onPress={() => setShowAddModal(true)}
+        onPress={handleAddTableClick}
         activeOpacity={0.8}
       >
         <Ionicons name="add" size={32} color="#fff" />
       </TouchableOpacity>
 
+      {/* Table Selection Modal */}
       <Modal
-        visible={showAddModal}
+        visible={showTableSelectModal}
         transparent
-        animationType="fade"
-        onRequestClose={() => setShowAddModal(false)}
+        animationType="slide"
+        onRequestClose={() => setShowTableSelectModal(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add New Table</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Table</Text>
+              <TouchableOpacity onPress={() => setShowTableSelectModal(false)}>
+                <Ionicons name="close" size={28} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={availableTables}
+              renderItem={renderAvailableTable}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              contentContainerStyle={styles.tableMasterGrid}
+              ListEmptyComponent={
+                <View style={styles.emptyModalContainer}>
+                  <Ionicons name="alert-circle-outline" size={48} color="#ccc" />
+                  <Text style={styles.emptyModalText}>No tables available</Text>
+                  <Text style={styles.emptyModalSubText}>Add tables in Settings</Text>
+                </View>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Number of Persons Modal */}
+      <Modal
+        visible={showPersonsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPersonsModal(false);
+          setSelectedTableMaster(null);
+          setNumPersons('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.personsModalContent}>
+            <Text style={styles.personsModalTitle}>Table {selectedTableMaster?.name}</Text>
+            <View style={styles.seatsInfoLarge}>
+              <Text style={styles.seatsInfoText}>
+                Available Seats: <Text style={styles.seatsHighlight}>{selectedTableMaster?.availableSeats}</Text> / {selectedTableMaster?.maxSeats}
+              </Text>
+            </View>
+            <Text style={styles.inputLabel}>Number of Persons</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter table name (e.g., 1, 2, 4-1)"
-              value={tableName}
-              onChangeText={setTableName}
+              placeholder="Enter number of persons"
+              value={numPersons}
+              onChangeText={setNumPersons}
+              keyboardType="numeric"
               autoFocus
-              autoCapitalize="none"
+              maxLength={2}
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
-                  setShowAddModal(false);
-                  setTableName('');
+                  setShowPersonsModal(false);
+                  setSelectedTableMaster(null);
+                  setNumPersons('');
                 }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.addModalButton]}
-                onPress={handleAddTable}
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleConfirmPersons}
               >
-                <Text style={styles.addButtonText}>Add</Text>
+                <Text style={styles.confirmButtonText}>Confirm</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -161,7 +260,7 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 120,
+    minHeight: 130,
     maxWidth: '31%',
     elevation: 2,
     shadowColor: '#000',
@@ -176,6 +275,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  tablePersons: {
+    fontSize: 12,
+    color: '#666',
     textAlign: 'center',
   },
   itemsBadge: {
@@ -230,21 +335,116 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 24,
-    width: '85%',
-    maxWidth: 400,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  tableMasterGrid: {
+    paddingTop: 8,
+  },
+  tableMasterCard: {
+    flex: 1,
+    margin: 6,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    minHeight: 140,
+    borderWidth: 2,
+    borderColor: '#FF6B35',
+  },
+  tableMasterIcon: {
+    marginBottom: 8,
+  },
+  tableMasterName: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
+    marginBottom: 8,
+  },
+  seatsInfo: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  seatsLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  seatsValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  occupiedInfo: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 4,
+  },
+  emptyModalContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyModalText: {
+    fontSize: 16,
+    color: '#999',
+    marginTop: 12,
+  },
+  emptyModalSubText: {
+    fontSize: 14,
+    color: '#ccc',
+    marginTop: 4,
+  },
+  personsModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    margin: 20,
+  },
+  personsModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
     marginBottom: 16,
+  },
+  seatsInfoLarge: {
+    backgroundColor: '#f0f0f0',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  seatsInfoText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  seatsHighlight: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
   },
   input: {
     borderWidth: 1,
@@ -273,10 +473,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  addModalButton: {
+  confirmButton: {
     backgroundColor: '#FF6B35',
   },
-  addButtonText: {
+  confirmButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

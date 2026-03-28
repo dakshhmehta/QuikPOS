@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
   TextInput,
   Modal,
   Alert,
@@ -12,34 +12,58 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { getItems, addItem, updateItem, deleteItem, MenuItem } from '../../utils/storage';
+import {
+  getItems,
+  addItem,
+  updateItem,
+  deleteItem,
+  MenuItem,
+  getTableMasters,
+  addTableMaster,
+  updateTableMaster,
+  deleteTableMaster,
+  TableMaster,
+} from '../../utils/storage';
 
 export default function SettingsScreen() {
+  // Menu Items state
   const [items, setItems] = useState<MenuItem[]>([]);
-  const [showModal, setShowModal] = useState(false);
+  const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemName, setItemName] = useState('');
   const [itemPrice, setItemPrice] = useState('');
+
+  // Table Masters state
+  const [tableMasters, setTableMasters] = useState<TableMaster[]>([]);
+  const [showTableModal, setShowTableModal] = useState(false);
+  const [editingTable, setEditingTable] = useState<TableMaster | null>(null);
+  const [tableName, setTableName] = useState('');
+  const [maxSeats, setMaxSeats] = useState('');
+
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadItems = async () => {
+  const loadData = async () => {
     const allItems = await getItems();
     setItems(allItems);
+
+    const masters = await getTableMasters();
+    setTableMasters(masters);
   };
 
   useFocusEffect(
     useCallback(() => {
-      loadItems();
+      loadData();
     }, [])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadItems();
+    await loadData();
     setRefreshing(false);
   };
 
-  const handleSave = async () => {
+  // Menu Items handlers
+  const handleSaveItem = async () => {
     if (!itemName.trim()) {
       Alert.alert('Error', 'Item name is required');
       return;
@@ -57,102 +81,244 @@ export default function SettingsScreen() {
       await addItem(itemName.trim(), price);
     }
 
-    resetForm();
-    loadItems();
+    resetItemForm();
+    loadData();
   };
 
-  const handleEdit = (item: MenuItem) => {
+  const handleEditItem = (item: MenuItem) => {
     setEditingItem(item);
     setItemName(item.name);
     setItemPrice(item.price.toString());
-    setShowModal(true);
+    setShowItemModal(true);
   };
 
-  const handleDelete = (item: MenuItem) => {
-    Alert.alert(
-      'Delete Item',
-      `Are you sure you want to delete "${item.name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteItem(item.id);
-            loadItems();
-          },
+  const handleDeleteItem = (item: MenuItem) => {
+    Alert.alert('Delete Item', `Are you sure you want to delete "${item.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteItem(item.id);
+          loadData();
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  const resetForm = () => {
-    setShowModal(false);
+  const resetItemForm = () => {
+    setShowItemModal(false);
     setEditingItem(null);
     setItemName('');
     setItemPrice('');
   };
 
-  const renderItem = ({ item }: { item: MenuItem }) => (
-    <View style={styles.itemCard}>
-      <View style={styles.itemInfo}>
-        <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemPrice}>₹{item.price}</Text>
-      </View>
-      <View style={styles.itemActions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleEdit(item)}
-        >
-          <Ionicons name="create-outline" size={24} color="#4CAF50" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleDelete(item)}
-        >
-          <Ionicons name="trash-outline" size={24} color="#F44336" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  // Table Masters handlers
+  const handleSaveTable = async () => {
+    if (!tableName.trim()) {
+      Alert.alert('Error', 'Table name is required');
+      return;
+    }
+
+    const seats = parseInt(maxSeats);
+    if (isNaN(seats) || seats <= 0) {
+      Alert.alert('Error', 'Please enter a valid number of seats');
+      return;
+    }
+
+    if (editingTable) {
+      await updateTableMaster(editingTable.id, tableName.trim(), seats);
+    } else {
+      await addTableMaster(tableName.trim(), seats);
+    }
+
+    resetTableForm();
+    loadData();
+  };
+
+  const handleEditTable = (table: TableMaster) => {
+    setEditingTable(table);
+    setTableName(table.name);
+    setMaxSeats(table.maxSeats.toString());
+    setShowTableModal(true);
+  };
+
+  const handleDeleteTable = (table: TableMaster) => {
+    Alert.alert('Delete Table', `Are you sure you want to delete table "${table.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteTableMaster(table.id);
+          loadData();
+        },
+      },
+    ]);
+  };
+
+  const resetTableForm = () => {
+    setShowTableModal(false);
+    setEditingTable(null);
+    setTableName('');
+    setMaxSeats('');
+  };
 
   return (
     <View style={styles.container}>
-      <View style={styles.sectionHeader}>
-        <Ionicons name="fast-food" size={24} color="#FF6B35" />
-        <Text style={styles.sectionTitle}>Menu Items</Text>
-      </View>
-      
-      <FlatList
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="fast-food-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>No menu items</Text>
-            <Text style={styles.emptySubText}>Tap + to add items</Text>
-          </View>
-        }
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      />
-
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => setShowModal(true)}
-        activeOpacity={0.8}
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Ionicons name="add" size={32} color="#fff" />
-      </TouchableOpacity>
+        {/* Table Masters Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="grid" size={24} color="#FF6B35" />
+            <Text style={styles.sectionTitle}>Table Management</Text>
+            <TouchableOpacity
+              style={styles.addIconButton}
+              onPress={() => setShowTableModal(true)}
+            >
+              <Ionicons name="add-circle" size={28} color="#FF6B35" />
+            </TouchableOpacity>
+          </View>
 
+          {tableMasters.length === 0 ? (
+            <View style={styles.emptySection}>
+              <Text style={styles.emptySectionText}>No tables configured</Text>
+              <Text style={styles.emptySectionSubText}>Tap + to add tables</Text>
+            </View>
+          ) : (
+            <View style={styles.listContent}>
+              {tableMasters.map((table) => (
+                <View key={table.id} style={styles.card}>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardName}>{table.name}</Text>
+                    <Text style={styles.cardDetail}>Max Seats: {table.maxSeats}</Text>
+                  </View>
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleEditTable(table)}
+                    >
+                      <Ionicons name="create-outline" size={24} color="#4CAF50" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleDeleteTable(table)}
+                    >
+                      <Ionicons name="trash-outline" size={24} color="#F44336" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Menu Items Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="fast-food" size={24} color="#FF6B35" />
+            <Text style={styles.sectionTitle}>Menu Items</Text>
+            <TouchableOpacity
+              style={styles.addIconButton}
+              onPress={() => setShowItemModal(true)}
+            >
+              <Ionicons name="add-circle" size={28} color="#FF6B35" />
+            </TouchableOpacity>
+          </View>
+
+          {items.length === 0 ? (
+            <View style={styles.emptySection}>
+              <Text style={styles.emptySectionText}>No menu items</Text>
+              <Text style={styles.emptySectionSubText}>Tap + to add items</Text>
+            </View>
+          ) : (
+            <View style={styles.listContent}>
+              {items.map((item) => (
+                <View key={item.id} style={styles.card}>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardName}>{item.name}</Text>
+                    <Text style={styles.cardPrice}>₹{item.price}</Text>
+                  </View>
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleEditItem(item)}
+                    >
+                      <Ionicons name="create-outline" size={24} color="#4CAF50" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleDeleteItem(item)}
+                    >
+                      <Ionicons name="trash-outline" size={24} color="#F44336" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Table Master Modal */}
       <Modal
-        visible={showModal}
+        visible={showTableModal}
         transparent
         animationType="fade"
-        onRequestClose={resetForm}
+        onRequestClose={resetTableForm}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editingTable ? 'Edit Table' : 'Add New Table'}
+            </Text>
+
+            <Text style={styles.label}>Table Name/Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., 1, 2, 4-1, VIP-1"
+              value={tableName}
+              onChangeText={setTableName}
+              autoFocus
+            />
+
+            <Text style={styles.label}>Maximum Seats</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., 4, 6, 8"
+              value={maxSeats}
+              onChangeText={setMaxSeats}
+              keyboardType="numeric"
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={resetTableForm}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={handleSaveTable}
+              >
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Menu Item Modal */}
+      <Modal
+        visible={showItemModal}
+        transparent
+        animationType="fade"
+        onRequestClose={resetItemForm}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -181,13 +347,13 @@ export default function SettingsScreen() {
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={resetForm}
+                onPress={resetItemForm}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.saveButton]}
-                onPress={handleSave}
+                onPress={handleSaveItem}
               >
                 <Text style={styles.saveButtonText}>Save</Text>
               </TouchableOpacity>
@@ -204,8 +370,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  sectionHeader: {
+  section: {
     backgroundColor: '#fff',
+    marginBottom: 1,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
@@ -214,15 +383,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sectionTitle: {
-    fontSize: 20,
+    flex: 1,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
   },
-  listContainer: {
-    padding: 16,
-    flexGrow: 1,
+  addIconButton: {
+    padding: 4,
   },
-  itemCard: {
+  listContent: {
+    padding: 12,
+  },
+  card: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
@@ -230,65 +402,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
-  itemInfo: {
+  cardInfo: {
     flex: 1,
   },
-  itemName: {
+  cardName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
   },
-  itemPrice: {
+  cardDetail: {
+    fontSize: 14,
+    color: '#666',
+  },
+  cardPrice: {
     fontSize: 16,
     color: '#FF6B35',
     fontWeight: '600',
   },
-  itemActions: {
+  cardActions: {
     flexDirection: 'row',
     gap: 12,
   },
   actionButton: {
     padding: 8,
   },
-  emptyContainer: {
-    flex: 1,
+  emptySection: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 100,
+    paddingVertical: 40,
   },
-  emptyText: {
-    fontSize: 18,
+  emptySectionText: {
+    fontSize: 16,
     color: '#999',
-    marginTop: 16,
-    fontWeight: '600',
   },
-  emptySubText: {
+  emptySectionSubText: {
     fontSize: 14,
     color: '#ccc',
-    marginTop: 8,
+    marginTop: 4,
   },
-  addButton: {
-    position: 'absolute',
-    right: 24,
-    bottom: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FF6B35',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+  divider: {
+    height: 8,
+    backgroundColor: '#f5f5f5',
   },
   modalOverlay: {
     flex: 1,
