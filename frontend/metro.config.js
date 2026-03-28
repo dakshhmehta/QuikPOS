@@ -11,14 +11,6 @@ config.cacheStores = [
   new FileStore({ root: path.join(root, 'cache') }),
 ];
 
-// Set base path for GitHub Pages deployment
-if (process.env.EXPO_PUBLIC_BASE_PATH) {
-  config.transformer = {
-    ...config.transformer,
-    publicPath: process.env.EXPO_PUBLIC_BASE_PATH + '/_expo/static',
-  };
-}
-
 // Reduce the number of workers to decrease resource usage
 config.maxWorkers = 2;
 

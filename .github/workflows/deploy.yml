@@ -38,52 +38,31 @@ jobs:
 
       - name: Build PWA
         working-directory: ./frontend
-        env:
-          EXPO_PUBLIC_BASE_PATH: /QuikPOS
         run: npx expo export -p web --clear
 
       - name: Prepare for GitHub Pages
         working-directory: ./frontend/dist
         run: |
-          echo "📦 Preparing PWA build for GitHub Pages..."
+          echo "📦 Preparing PWA for GitHub Pages (root deployment)..."
           
-          # Create .nojekyll to disable Jekyll processing (CRITICAL for _expo folder)
+          # Create .nojekyll (CRITICAL for _expo folder)
           touch .nojekyll
           echo "✅ .nojekyll created"
           
-          # Fix asset paths for GitHub Pages subdirectory deployment
-          echo "🔧 Fixing asset paths for /QuikPOS/ base URL..."
-          find . -name "*.html" -type f -exec sed -i 's|href="/|href="/QuikPOS/|g; s|src="/|src="/QuikPOS/|g' {} \;
-          echo "✅ HTML paths updated"
-          
-          # Verify critical folders exist
+          # Verify _expo folder exists
           if [ -d "_expo" ]; then
             echo "✅ _expo folder found"
-            ls -la _expo/ | head -10
           else
             echo "❌ ERROR: _expo folder missing!"
             exit 1
           fi
           
-          # Verify manifest and icons
-          test -f manifest.json && echo "✅ manifest.json found" || echo "⚠️ manifest.json missing"
-          test -f icon-192.png && echo "✅ icon-192.png found" || echo "⚠️ icon-192.png missing"
-          test -f icon-512.png && echo "✅ icon-512.png found" || echo "⚠️ icon-512.png missing"
+          # Verify PWA assets
+          test -f manifest.json && echo "✅ manifest.json" || echo "⚠️ manifest.json missing"
+          test -f icon-192.png && echo "✅ icon-192.png" || echo "⚠️ icon-192.png missing"  
+          test -f icon-512.png && echo "✅ icon-512.png" || echo "⚠️ icon-512.png missing"
           
-          # Show sample of fixed paths
-          echo ""
-          echo "📋 Sample of fixed paths in index.html:"
-          grep -o 'src="[^"]*"' index.html | head -5
-          grep -o 'href="[^"]*"' index.html | head -5
-          
-          # List all root files and directories
-          echo ""
-          echo "📁 Build contents:"
-          ls -lah
-          
-          echo ""
-          echo "🔍 Checking for underscore files/folders (must be included):"
-          find . -maxdepth 2 -name "_*" -o -name ".*" | head -20
+          echo "✅ Build ready for deployment"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
