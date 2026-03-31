@@ -93,10 +93,33 @@ export default function RunningTablesScreen() {
 
   const handlePersonsChange = (value: string) => {
     setNumPersons(value);
-    if (value.trim()) {
+    if (value.length > 0) {
       validatePersons(value);
     } else {
       setPersonsError('Number of persons is required');
+    }
+  };
+
+  const isDigitVisible = (digit: string) => {
+    if (!selectedTableMaster) return false;
+    const newValueStr = numPersons + digit;
+    const newValue = parseInt(newValueStr);
+    
+    if (isNaN(newValue)) return false;
+    if (newValue <= 0) return false;
+    if (newValue > selectedTableMaster.availableSeats) return false;
+    return true;
+  };
+
+  const handleNumberPress = (num: string) => {
+    if (numPersons.length >= 2) return;
+    if (!isDigitVisible(num)) return;
+    handlePersonsChange(numPersons + num);
+  };
+
+  const handleBackspace = () => {
+    if (numPersons.length > 0) {
+      handlePersonsChange(numPersons.slice(0, -1));
     }
   };
 
@@ -246,18 +269,46 @@ export default function RunningTablesScreen() {
               </Text>
             </View>
             <Text style={styles.inputLabel}>Number of Persons</Text>
-            <TextInput
-              style={[styles.input, personsError ? styles.inputError : null]}
-              placeholder="Enter number of persons"
-              value={numPersons}
-              onChangeText={handlePersonsChange}
-              keyboardType="numeric"
-              autoFocus
-              maxLength={2}
-            />
+            <View style={[styles.displayContainer, personsError ? styles.displayError : null]}>
+              <Text style={styles.displayText}>{numPersons || '0'}</Text>
+            </View>
+            
             {personsError ? (
               <Text style={styles.errorText}>{personsError}</Text>
             ) : null}
+
+            <View style={styles.keypad}>
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
+                isDigitVisible(num) ? (
+                  <TouchableOpacity
+                    key={num}
+                    style={styles.keypadButton}
+                    onPress={() => handleNumberPress(num)}
+                  >
+                    <Text style={styles.keypadButtonText}>{num}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View key={num} style={styles.keypadButtonPlaceholder} />
+                )
+              ))}
+              <View style={styles.keypadSpacer} />
+              {isDigitVisible('0') ? (
+                <TouchableOpacity
+                  style={styles.keypadButton}
+                  onPress={() => handleNumberPress('0')}
+                >
+                  <Text style={styles.keypadButtonText}>0</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.keypadButtonPlaceholder} />
+              )}
+              <TouchableOpacity
+                style={[styles.keypadButton, styles.backspaceButton]}
+                onPress={handleBackspace}
+              >
+                <Ionicons name="backspace-outline" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
@@ -495,17 +546,58 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 8,
   },
-  input: {
+  displayContainer: {
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    padding: 16,
     marginBottom: 8,
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
   },
-  inputError: {
+  displayError: {
     borderColor: '#F44336',
     borderWidth: 2,
+  },
+  displayText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  keypad: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 10,
+  },
+  keypadButton: {
+    width: '30%',
+    aspectRatio: 1.5,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  keypadButtonText: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#333',
+  },
+  keypadButtonPlaceholder: {
+    width: '30%',
+    aspectRatio: 1.5,
+  },
+  keypadSpacer: {
+    width: '30%',
+  },
+  backspaceButton: {
+    backgroundColor: '#e0e0e0',
   },
   errorText: {
     color: '#F44336',
