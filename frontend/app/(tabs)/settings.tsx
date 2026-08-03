@@ -41,6 +41,38 @@ export default function SettingsScreen() {
   const [maxSeats, setMaxSeats] = useState('');
 
   const [refreshing, setRefreshing] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    onConfirm?: () => void;
+    showCancel?: boolean;
+    isDestructive?: boolean;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    onConfirm?: () => void,
+    confirmText = 'OK',
+    showCancel = false,
+    isDestructive = false
+  ) => {
+    setAlertConfig({
+      visible: true,
+      title,
+      message,
+      onConfirm,
+      confirmText,
+      showCancel,
+      isDestructive,
+    });
+  };
 
   const loadData = async () => {
     const allItems = await getItems();
@@ -65,13 +97,13 @@ export default function SettingsScreen() {
   // Menu Items handlers
   const handleSaveItem = async () => {
     if (!itemName.trim()) {
-      Alert.alert('Error', 'Item name is required');
+      showAlert('Required', 'Item name is required');
       return;
     }
 
     const price = parseFloat(itemPrice);
     if (isNaN(price) || price <= 0) {
-      Alert.alert('Error', 'Please enter a valid price');
+      showAlert('Invalid Price', 'Please enter a valid price');
       return;
     }
 
@@ -93,17 +125,17 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteItem = (item: MenuItem) => {
-    Alert.alert('Delete Item', `Are you sure you want to delete "${item.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteItem(item.id);
-          loadData();
-        },
+    showAlert(
+      'Delete Item',
+      `Are you sure you want to delete "${item.name}"?`,
+      async () => {
+        await deleteItem(item.id);
+        loadData();
       },
-    ]);
+      'Delete',
+      true,
+      true
+    );
   };
 
   const resetItemForm = () => {
@@ -116,13 +148,13 @@ export default function SettingsScreen() {
   // Table Masters handlers
   const handleSaveTable = async () => {
     if (!tableName.trim()) {
-      Alert.alert('Error', 'Table name is required');
+      showAlert('Required', 'Table name is required');
       return;
     }
 
     const seats = parseInt(maxSeats);
     if (isNaN(seats) || seats <= 0) {
-      Alert.alert('Error', 'Please enter a valid number of seats');
+      showAlert('Invalid Seats', 'Please enter a valid number of seats');
       return;
     }
 
@@ -144,17 +176,17 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteTable = (table: TableMaster) => {
-    Alert.alert('Delete Table', `Are you sure you want to delete table "${table.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteTableMaster(table.id);
-          loadData();
-        },
+    showAlert(
+      'Delete Table',
+      `Are you sure you want to delete table "${table.name}"?`,
+      async () => {
+        await deleteTableMaster(table.id);
+        loadData();
       },
-    ]);
+      'Delete',
+      true,
+      true
+    );
   };
 
   const resetTableForm = () => {
@@ -361,6 +393,48 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Global Alert Modal */}
+      <Modal
+        visible={alertConfig.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.alertModalContent}>
+            <Ionicons 
+              name={alertConfig.showCancel ? "help-circle-outline" : "alert-circle-outline"} 
+              size={48} 
+              color={alertConfig.isDestructive ? "#F44336" : "#FF6B35"} 
+            />
+            <Text style={styles.alertModalTitle}>{alertConfig.title}</Text>
+            <Text style={styles.alertModalMessage}>{alertConfig.message}</Text>
+            <View style={styles.alertModalButtons}>
+              {alertConfig.showCancel && (
+                <TouchableOpacity
+                  style={[styles.alertModalButton, styles.alertCancelButton]}
+                  onPress={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+                >
+                  <Text style={styles.alertCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[
+                  styles.alertModalButton, 
+                  alertConfig.isDestructive ? styles.alertDestructiveButton : styles.alertConfirmButton
+                ]}
+                onPress={() => {
+                  if (alertConfig.onConfirm) alertConfig.onConfirm();
+                  setAlertConfig(prev => ({ ...prev, visible: false }));
+                }}
+              >
+                <Text style={styles.alertConfirmText}>{alertConfig.confirmText}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -504,6 +578,61 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF6B35',
   },
   saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  alertModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    margin: 40,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  alertModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  alertModalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  alertModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  alertModalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  alertCancelButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  alertCancelText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  alertConfirmButton: {
+    backgroundColor: '#FF6B35',
+  },
+  alertDestructiveButton: {
+    backgroundColor: '#F44336',
+  },
+  alertConfirmText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

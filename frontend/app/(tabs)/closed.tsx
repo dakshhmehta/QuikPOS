@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { getClosedTablesByDate, Table } from '../../utils/storage';
+import { getClosedTablesByDate, deleteTablesByDate, Table } from '../../utils/storage';
 
 export default function ClosedTablesScreen() {
   const [tables, setTables] = useState<Table[]>([]);
@@ -20,6 +20,8 @@ export default function ClosedTablesScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const dateInputRef = useRef<any>(null);
 
   const loadTables = async (date: Date) => {
     const closedTables = await getClosedTablesByDate(date);
@@ -39,10 +41,37 @@ export default function ClosedTablesScreen() {
   };
 
   const handleDateChange = (event: any, date?: Date) => {
+    if (Platform.OS === 'web') {
+      const value = event.target.value;
+      if (value) {
+        const newDate = new Date(value);
+        if (!isNaN(newDate.getTime())) {
+          setSelectedDate(newDate);
+          loadTables(newDate);
+        }
+      }
+      return;
+    }
+
     setShowDatePicker(Platform.OS === 'ios');
     if (date) {
       setSelectedDate(date);
       loadTables(date);
+    }
+  };
+
+  const handleWebPickerClick = () => {
+    if (dateInputRef.current) {
+      try {
+        if (typeof dateInputRef.current.showPicker === 'function') {
+          dateInputRef.current.showPicker();
+        } else {
+          dateInputRef.current.click();
+        }
+      } catch (e) {
+        // Fallback for older browsers
+        dateInputRef.current.click();
+      }
     }
   };
 
@@ -59,6 +88,62 @@ export default function ClosedTablesScreen() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const handleClearDayData = async () => {
+    await deleteTablesByDate(selectedDate);
+    setShowClearConfirm(false);
+    loadTables(selectedDate);
+    if (Platform.OS === 'web') {
+      window.alert("Cleared all data for the selected date.");
+    } else {
+      alert("Cleared all data for the selected date.");
+    }
+  };
+
+  const handleDownloadToday = async () => {
+    const today = new Date();
+    const todayTables = await getClosedTablesByDate(today);
+
+    if (todayTables.length === 0) {
+      if (Platform.OS === 'web') {
+        window.alert("No sales data found for today.");
+      } else {
+        alert("No sales data found for today.");
+      }
+      return;
+    }
+
+    // CSV Header
+    let csv = "Date,Time,Table,Persons,Items,Amount\n";
+
+    todayTables.forEach((table) => {
+      const dateStr = new Date(table.closedAt || 0).toLocaleDateString('en-IN');
+      const timeStr = new Date(table.closedAt || 0).toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      // Escape quotes in item names and join with semicolon to avoid CSV conflicts
+      const itemsStr = table.items
+        .map((i) => `${i.itemName.replace(/"/g, '""')} (x${i.quantity})`)
+        .join("; ");
+
+      csv += `"${dateStr}","${timeStr}","${table.name.replace(/"/g, '""')}",${table.numPersons},"${itemsStr}",${table.totalAmount}\n`;
+    });
+
+    if (Platform.OS === 'web') {
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `Sales_Report_${today.toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      alert("Download is currently optimized for Web PWA.");
+    }
   };
 
   const renderTable = ({ item }: { item: Table }) => (
@@ -87,11 +172,37 @@ export default function ClosedTablesScreen() {
       <View style={styles.dateFilterContainer}>
         <TouchableOpacity
           style={styles.dateButton}
-          onPress={() => setShowDatePicker(true)}
+          onPress={() => {
+            if (Platform.OS === 'web') {
+              handleWebPickerClick();
+            } else {
+              setShowDatePicker(true);
+            }
+          }}
         >
           <Ionicons name="calendar-outline" size={20} color="#FF6B35" />
           <Text style={styles.dateButtonText}>{formatDate(selectedDate)}</Text>
           <Ionicons name="chevron-down" size={20} color="#FF6B35" />
+          
+          {Platform.OS === 'web' && (
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={selectedDate.toISOString().split('T')[0]}
+              onChange={handleDateChange}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                opacity: 0,
+                zIndex: -1, // Keep it in DOM but hidden
+                pointerEvents: 'none',
+              }}
+              max={new Date().toISOString().split('T')[0]}
+            />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -114,7 +225,27 @@ export default function ClosedTablesScreen() {
         }
       />
 
-      {showDatePicker && (
+      <View style={styles.fabContainer}>
+        <TouchableOpacity
+          style={[styles.fab, styles.downloadFab]}
+          onPress={handleDownloadToday}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="download" size={26} color="#fff" />
+        </TouchableOpacity>
+        
+        {tables.length > 0 && (
+          <TouchableOpacity
+            style={[styles.fab, styles.clearFab]}
+            onPress={() => setShowClearConfirm(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="trash-outline" size={26} color="#fff" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {showDatePicker && Platform.OS !== 'web' && (
         <DateTimePicker
           value={selectedDate}
           mode="date"
@@ -168,6 +299,38 @@ export default function ClosedTablesScreen() {
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Total Amount:</Text>
               <Text style={styles.totalAmount}>₹{selectedTable?.totalAmount}</Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Clear Data Confirmation Modal */}
+      <Modal
+        visible={showClearConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowClearConfirm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.alertModalContent}>
+            <Ionicons name="alert-circle-outline" size={48} color="#F44336" />
+            <Text style={styles.alertModalTitle}>Clear Sales Data</Text>
+            <Text style={styles.alertModalMessage}>
+              Are you sure you want to delete all closed table data for <Text style={styles.boldText}>{formatDate(selectedDate)}</Text>? This action cannot be undone.
+            </Text>
+            <View style={styles.alertModalButtons}>
+              <TouchableOpacity
+                style={[styles.alertModalButton, styles.alertCancelButton]}
+                onPress={() => setShowClearConfirm(false)}
+              >
+                <Text style={styles.alertCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.alertModalButton, styles.alertDeleteButton]}
+                onPress={handleClearDayData}
+              >
+                <Text style={styles.alertDeleteText}>Clear Data</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -360,5 +523,85 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FF6B35',
+  },
+  fabContainer: {
+    position: 'absolute',
+    right: 24,
+    bottom: 24,
+    gap: 16,
+  },
+  fab: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  downloadFab: {
+    backgroundColor: '#4CAF50',
+  },
+  clearFab: {
+    backgroundColor: '#F44336',
+  },
+  alertModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    margin: 40,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  alertModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  alertModalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  boldText: {
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  alertModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  alertModalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  alertCancelButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  alertCancelText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  alertDeleteButton: {
+    backgroundColor: '#F44336',
+  },
+  alertDeleteText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -11,7 +11,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "predeploy": "npx expo export -p web --clear",
-    "deploy": "gh-pages -d dist"
+    "deploy": "firebase deploy"
   },
   "dependencies": {
     "@babel/runtime": "^7.20.6",

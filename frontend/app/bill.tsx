@@ -31,6 +31,7 @@ export default function BillScreen() {
   const [showQuantityModal, setShowQuantityModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
 
   const loadData = async () => {
     const menuItems = await getItems();
@@ -165,21 +166,7 @@ export default function BillScreen() {
     
     // If table has 0 amount, just discard it
     if (table.totalAmount === 0) {
-      Alert.alert(
-        'Discard Table',
-        'This table has no orders. Do you want to discard it?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: async () => {
-              await deleteTable(table.id);
-              router.back();
-            },
-          },
-        ]
-      );
+      setShowDiscardModal(true);
       return;
     }
     
@@ -359,6 +346,43 @@ export default function BillScreen() {
                 onPress={confirmCloseTable}
               >
                 <Text style={styles.confirmCloseButtonText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      
+      <Modal
+        visible={showDiscardModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDiscardModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.alertModalContent}>
+            <Ionicons name="trash-outline" size={48} color="#F44336" />
+            <Text style={styles.alertModalTitle}>Discard Table</Text>
+            <Text style={styles.alertModalMessage}>
+              This table has no orders. Do you want to discard it?
+            </Text>
+            <View style={styles.alertModalButtons}>
+              <TouchableOpacity
+                style={[styles.alertModalButton, styles.alertCancelButton]}
+                onPress={() => setShowDiscardModal(false)}
+              >
+                <Text style={styles.alertCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.alertModalButton, styles.alertDiscardButton]}
+                onPress={async () => {
+                  if (table) {
+                    await deleteTable(table.id);
+                    setShowDiscardModal(false);
+                    router.back();
+                  }
+                }}
+              >
+                <Text style={styles.alertDiscardText}>Discard</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -636,6 +660,58 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
   },
   confirmCloseButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  alertModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    margin: 40,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  alertModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  alertModalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  alertModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  alertModalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  alertCancelButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  alertCancelText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  alertDiscardButton: {
+    backgroundColor: '#F44336',
+  },
+  alertDiscardText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

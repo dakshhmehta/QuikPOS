@@ -248,3 +248,21 @@ export const deleteTable = async (tableId: string): Promise<void> => {
   const filtered = tables.filter(t => t.id !== tableId);
   await saveTables(filtered);
 };
+
+export const deleteTablesByDate = async (date: Date): Promise<void> => {
+  const tables = await getTables();
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  const startTime = startOfDay.getTime();
+  const endTime = endOfDay.getTime();
+
+  const filtered = tables.filter(t => {
+    if (t.status !== 'closed' || !t.closedAt) return true;
+    return t.closedAt < startTime || t.closedAt > endTime;
+  });
+  
+  await saveTables(filtered);
+};
